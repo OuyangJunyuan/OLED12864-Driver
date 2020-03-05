@@ -1,16 +1,18 @@
 #ifndef __OLED_H
 #define __OLED_H
+#include "oledfont.h"
 /*----------------------------------------------- 通信方式选择 ---------------------------------------------*/
 //#define _OLED_BY_HW_I2C
-#define _OLED_BY_SW_I2C
-//#define _OLED_BY_SPI
-/*----------------------------------------------- 通信方式选择 ---------------------------------------------*/
+//#define _OLED_BY_SW_I2C
+#define _OLED_BY_SPI
 
+/*----------------------------------------------- 通信方式选择 ---------------------------------------------*/
 #if (defined _OLED_BY_HW_I2C)
 	#include "i2c.h"
 /*---------------------------------------------- 硬件I2C设置地点 -------------------------------------------*/
 	#define OLED_hi2cn &hi2c1
 	#define HW_I2C_Transmit(__HANDLE,__ADDRESS,__BUFFER,__SIZE) HAL_I2C_Master_Transmit(__HANDLE,__ADDRESS,(uint8_t*)__BUFFER,__SIZE,0xffff)
+	
 /*---------------------------------------------- 硬件I2C设置地点 -------------------------------------------*/	
 #elif (defined _OLED_BY_SW_I2C)
 	#include "gpio.h"
@@ -45,23 +47,23 @@
 	
 	#define OLED_hspin &hspi1
 	
-	#define RES_PORT GPIOF
-	#define RES_PIN GPIO_PIN_13
+	#define RES_PORT GPIOB
+	#define RES_PIN GPIO_PIN_0
 	
-	#define	DC_PORT GPIOF
-	#define	DC_PIN GPIO_PIN_14
+	#define	DC_PORT GPIOB
+	#define	DC_PIN GPIO_PIN_1
 	
-	#define	CS_PORT	GPIOF
-	#define	CS_PIN GPIO_PIN_15
+	#define	CS_PORT	GPIOB
+	#define	CS_PIN GPIO_PIN_10
 /*---------------------------------------------- 硬件SPI设置地点 -------------------------------------------*/
 	
 	
 	#define HW_SPI_Transmit(__HANDLE,__BUFFER,__SIZE) HAL_SPI_Transmit(__HANDLE,__BUFFER,__SIZE,0xffffff)
-	#define OLED_RST_SET() HAL_GPIO_WritePin(RES_PORT,holed.RES_PIN,GPIO_PIN_SET)
-	#define OLED_RST_RESET() HAL_GPIO_WritePin(RES_PORT,holed.RES_PIN,GPIO_PIN_RESET)
+	#define OLED_RST_SET() HAL_GPIO_WritePin(RES_PORT,RES_PIN,GPIO_PIN_SET)
+	#define OLED_RST_RESET() HAL_GPIO_WritePin(RES_PORT,RES_PIN,GPIO_PIN_RESET)
 
-	#define OLED_DC_SET() HAL_GPIO_WritePin(DC_PORT,holed.DC_PIN,GPIO_PIN_SET)
-	#define OLED_DC_RESET() HAL_GPIO_WritePin(DC_PORT,holed.DC_PIN,GPIO_PIN_RESET)
+	#define OLED_DC_SET() HAL_GPIO_WritePin(DC_PORT,DC_PIN,GPIO_PIN_SET)
+	#define OLED_DC_RESET() HAL_GPIO_WritePin(DC_PORT,DC_PIN,GPIO_PIN_RESET)
 
 	#define OLED_CS_SET() HAL_GPIO_WritePin(CS_PORT,CS_PIN,GPIO_PIN_SET)
 	#define OLED_CS_RESET() HAL_GPIO_WritePin(CS_PORT,CS_PIN,GPIO_PIN_RESET)
@@ -74,26 +76,15 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-#define OLED_DevAddress  0x78
-#define OLED_CMD 0
-#define OLED_DATA 1
 void OLED_Init(void);
 typedef struct
 {
-	void (*DrawPoint)(uint8_t x,uint8_t y);
+	void (*Point)(uint8_t x,uint8_t y,uint8_t flag);
 	void (*Clear)(void);
+	void (*Line)(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2);
+	void (*Char)(uint8_t c,uint8_t size,uint8_t x,uint8_t y);
+	void (*String)(uint8_t *ptr_str,uint8_t size,uint8_t x,uint8_t y);
+	void (*BMP)(uint8_t (*bmp)[8]);
 }DRAW_Ptr;
 
 typedef struct
@@ -116,9 +107,15 @@ typedef struct
 	SET_Ptr Set;
 }OLED_HandleTypeDef;
 
-
-
 extern OLED_HandleTypeDef  holed;
+extern unsigned char bmp1[][8];
+#define OLED_DevAddress  0x78
+#define OLED_CMD 0
+#define OLED_DATA 1
+#define POINT_DRAW 1
+#define POINT_MOVE 0
+#define OLED_MAX_X 127
+#define OLED_MAX_Y 63
 
 
 
@@ -136,15 +133,20 @@ extern OLED_HandleTypeDef  holed;
 
 
 
-
-
-
-
-
+#define ROUND(__ROUND_X) ((int)(__ROUND_X+0.5))
 
 
 
 #endif 
+
+
+
+
+
+/********************************************
+*重定向C语言库函数：可以print在屏幕上。
+*
+*********************************************/
 
 
 

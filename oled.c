@@ -1,11 +1,9 @@
 #include "oled.h"
-
 //******************************************** 资源声明  ********************************************//
 OLED_HandleTypeDef  holed={.Init=OLED_Init};
 volatile static uint8_t OLED_GDDRAM[128][8];  //显存
+
 //******************************************** 资源声明  ********************************************//
-
-
 
 
 
@@ -102,7 +100,6 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 
 void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 {
-	uint8_t read;
 	if(CorD==OLED_CMD)
 		OLED_DC_CMD();
 	else
@@ -124,10 +121,20 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 
 
 
-
 //************************************** 关于绘画的新函数放在这里  ***********************************//
+/*
+
+
+0---->X    页的字 LSB在y低的方向上
+|
+|
+V
+Y
+
+
+*/
 void OLED_Refresh(void)
-{
+{//循环方式根据GDDRAM寻址方式确定，这里使用页寻址。
 	for(uint8_t i=0;i<8;++i)
 	{		
 		OLED_WriteRead_Byte(0XB0+i,OLED_CMD);
@@ -139,35 +146,128 @@ void OLED_Refresh(void)
 		}
 	}
 }
-
-void OLED_DrawPoint(uint8_t x,uint8_t y)
+uint8_t sign=0;
+void OLED_DrawPoint(uint8_t x,uint8_t y,uint8_t flag)
 {
-	OLED_GDDRAM[x][y/8] |= 0x01<< (y%8);
+	if(flag)
+		OLED_GDDRAM[x][y/8] |=  (0x01 << (y%8));
+	else 
+		OLED_GDDRAM[x][y/8] &= (~(0x01<<(y%8)));
 }
-
-
 
 
 void OLED_Clear(void)
 {
 	for(int i=0;i<128;++i)
-	{
 		for(int j=0;j<8;++j)
-		{
 			OLED_GDDRAM[i][j]=0x00;
-		}	
+}
+
+void OLED_PutChar(uint8_t c,uint8_t size,uint8_t x,uint8_t y)
+{//asc2表从' '可显示符号后算起，这里需要计算asc2偏移得出索引 
+  uint8_t onebyte,len,idx1=c-' ',y0=y;
+	len=(size/8 /*整字个数 */+ (size%8?1:0 /*补零了无*/ ) )/*列有几个字*/*(size/2)/*英文只有汉字一半宽*/;
+	for(uint8_t idx2=0;idx2<len;++idx2)
+	{	//这里可以改以下，当字库大的时候可以弄个表放头指针直接遍历就可以了。否则需要多次判断太麻烦了。
+		switch(size)
+		{
+			case 10:
+				onebyte=asc2_set_1005[idx1][idx2];break;
+			case 12:
+				onebyte=asc2_set_1206[idx1][idx2];break;
+			case 14:
+				onebyte=asc2_set_1407[idx1][idx2];break;
+			case 16:
+				onebyte=asc2_set_1608[idx1][idx2];break;
+			case 20:
+				onebyte=asc2_set_2010[idx1][idx2];break;
+			case 24:
+				onebyte=asc2_set_2412[idx1][idx2];break;
+		}
+		for(uint8_t i=0;i<8;++i)
+		{
+			if(onebyte&0x01) //逆向取模，左上角是字节低位。
+				OLED_DrawPoint(x,y,POINT_DRAW);
+			else 
+				OLED_DrawPoint(x,y,POINT_MOVE);
+			
+			//读取个bit
+			y++;
+			onebyte>>=1;
+			if((y>63)||((y-y0)==size))
+			{
+				x++;
+				y=y0;
+				break;
+			}
+		}
 	}
-	
 }
 
 
 
 
+
+
+void OLED_PutString(uint8_t *ptr_str,uint8_t size,uint8_t x,uint8_t y)
+{
+	uint8_t x0=x;
+	while( (((*ptr_str) >=' ') &&  ((*ptr_str)<='~')) || ((*ptr_str)=='\n' ) )
+	{
+		if((*ptr_str)!='\n' )
+			OLED_PutChar(*ptr_str,size,x,y);
+		x+=size/2;
+		if( (x +size/2 > 128 ) || ((*ptr_str)=='\n') )
+		{
+			x=x0;
+			if( (y+=size) >63)
+				return;
+		}
+		++ptr_str;
+	}
+}
+void OLED_DrawLine(uint8_t x1,uint8_t y1,uint8_t x2,uint8_t y2)
+{
+	if( x1<-1e-6||x1>127||x2<-1e-6||x2>127||y1<-1e-6||y1>63||y2<-1e-6||y2>63)
+		return;
+	if(x1==x2)
+	{
+		int sign=(y2>y1 ? 1:-1);
+		for(int i=0;i<=sign*(y2-y1);++i)
+		{
+			OLED_DrawPoint(x1,y1+sign*i,POINT_DRAW);
+		}
+	}else if(y1==y2)
+	{
+		int sign=(x2>x1 ? 1:-1);
+		for(int i=0;i<=sign*(x2-x1);++i)
+		{
+			OLED_DrawPoint(x1+ sign*i,y1,POINT_DRAW);
+		}
+	}else
+	{	
+		int sign=(x2>x1 ? 1:-1);
+		float k=((float)y2-y1)/(x2-x1);
+		for(int i=0;i<=sign*(x2-x1); ++i)
+		{
+			OLED_DrawPoint(x1+sign*i,ROUND(y1+ k*i*sign),POINT_DRAW);
+		}
+	}
+}
+
+
+void OLED_BMP(uint8_t (*bmp)[8])
+{
+	for(int i=0;i<128;++i)
+	{
+		for(int j=0;j<8;++j)
+		{
+			OLED_GDDRAM[i][j]=(*bmp)[j];	
+		}
+		bmp++;
+	}
+}
 //************************************** 关于绘画的新函数放在这里  ***********************************//
-
-
-
-
 
 
 
@@ -219,10 +319,11 @@ void OLED_Init(void)
 	holed.Set.Refresh=OLED_Refresh;
 	
 	holed.Draw.Clear=OLED_Clear;
-	holed.Draw.DrawPoint=OLED_DrawPoint;
-
-	
-	
+	holed.Draw.Point=OLED_DrawPoint;
+	holed.Draw.Char=OLED_PutChar;
+	holed.Draw.String=OLED_PutString;
+	holed.Draw.Line=OLED_DrawLine;
+	holed.Draw.BMP=OLED_BMP;
 	/*------------------------------ OLED 参数设置 ----------------------------*/
 	//设置亮度调OLED_Deselect_VCOMH，OLED_PreChargePeriod，OLED_Set_Contrast
 	OLED_Display_OFF();//关闭显示
