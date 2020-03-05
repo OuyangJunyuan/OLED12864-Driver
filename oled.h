@@ -1,84 +1,153 @@
 #ifndef __OLED_H
 #define __OLED_H
-
+/*----------------------------------------------- 通信方式选择 ---------------------------------------------*/
 //#define _OLED_BY_HW_I2C
 #define _OLED_BY_SW_I2C
 //#define _OLED_BY_SPI
-
-
-
+/*----------------------------------------------- 通信方式选择 ---------------------------------------------*/
 
 #if (defined _OLED_BY_HW_I2C)
 	#include "i2c.h"
-#elif (defined _OLED_BY_SW_I2C)  
+/*---------------------------------------------- 硬件I2C设置地点 -------------------------------------------*/
+	#define OLED_hi2cn &hi2c1
+	#define HW_I2C_Transmit(__HANDLE,__ADDRESS,__BUFFER,__SIZE) HAL_I2C_Master_Transmit(__HANDLE,__ADDRESS,(uint8_t*)__BUFFER,__SIZE,0xffff)
+/*---------------------------------------------- 硬件I2C设置地点 -------------------------------------------*/	
+#elif (defined _OLED_BY_SW_I2C)
 	#include "gpio.h"
+/**-------------------------------------------- 软件I2C设置地点 -------------------------------------------
+	*设置指南：
+	*SCL和SDA可以使用任意一个GPIO管脚
+	*最好设置成开漏上拉超高速模式
+	*APB2时钟设置为36即可。超过了可能不工作
+***/
+	#define SCL_PORT GPIOA
+	#define SCL_PIN	GPIO_PIN_5
+	
+	#define SDA_PORT GPIOA
+	#define SDA_PIN GPIO_PIN_7
+/*---------------------------------------------- 软件I2C设置地点 -------------------------------------------*/
+	#define OLED_SCL_RESET() HAL_GPIO_WritePin(SCL_PORT,SCL_PIN,GPIO_PIN_RESET)
+	#define OLED_SCL_SET() 	 HAL_GPIO_WritePin(SCL_PORT,SCL_PIN,GPIO_PIN_SET)
+
+	#define OLED_SDA_RESET() HAL_GPIO_WritePin(SDA_PORT,SDA_PIN,GPIO_PIN_RESET)
+	#define OLED_SDA_SET() 	 HAL_GPIO_WritePin(SDA_PORT,SDA_PIN,GPIO_PIN_SET)
 #elif (defined _OLED_BY_SPI)
 	#include "spi.h"
+/**---------------------------------------------- 硬件SPI设置地点 -------------------------------------------
+	*设置指南：
+	*SPI可以设置成 摩托罗拉格式，8位数据长度，高位先行，预分频2，
+	*时钟和相位可以设置成LOW-1Edge或者HIGH-2Edge 都行，失能RCC校验，NSS软件选择模式。
+	*为了提高刷新率，可以使用SPI1-其使用APB2外设时钟， 
+	*												SPI2-其使用APB1外设时钟，
+	*选择APB1和APB2外设时钟频率最高的那个，配置到最高。如F4用SPI1可以达到42M的波特率
+	*其余RES、DC、CS 设置成推挽输出即可。
+***/
+	
+	#define OLED_hspin &hspi1
+	
+	#define RES_PORT GPIOF
+	#define RES_PIN GPIO_PIN_13
+	
+	#define	DC_PORT GPIOF
+	#define	DC_PIN GPIO_PIN_14
+	
+	#define	CS_PORT	GPIOF
+	#define	CS_PIN GPIO_PIN_15
+/*---------------------------------------------- 硬件SPI设置地点 -------------------------------------------*/
+	
+	
+	#define HW_SPI_Transmit(__HANDLE,__BUFFER,__SIZE) HAL_SPI_Transmit(__HANDLE,__BUFFER,__SIZE,0xffffff)
+	#define OLED_RST_SET() HAL_GPIO_WritePin(RES_PORT,holed.RES_PIN,GPIO_PIN_SET)
+	#define OLED_RST_RESET() HAL_GPIO_WritePin(RES_PORT,holed.RES_PIN,GPIO_PIN_RESET)
+
+	#define OLED_DC_SET() HAL_GPIO_WritePin(DC_PORT,holed.DC_PIN,GPIO_PIN_SET)
+	#define OLED_DC_RESET() HAL_GPIO_WritePin(DC_PORT,holed.DC_PIN,GPIO_PIN_RESET)
+
+	#define OLED_CS_SET() HAL_GPIO_WritePin(CS_PORT,CS_PIN,GPIO_PIN_SET)
+	#define OLED_CS_RESET() HAL_GPIO_WritePin(CS_PORT,CS_PIN,GPIO_PIN_RESET)
+
+	#define OLED_DC_CMD() OLED_DC_RESET()
+	#define OLED_DC_DATA() OLED_DC_SET()
 #else 
 	#error missing macro (_OLED_BY_HW_I2C/_OLED_BY_SW_I2C/_OLED_BY_SPI)
 #endif
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+#define OLED_DevAddress  0x78
+#define OLED_CMD 0
+#define OLED_DATA 1
+void OLED_Init(void);
 typedef struct
 {
-#if defined _OLED_BY_HW_I2C
-	I2C_HandleTypeDef* hi2cn;
-#elif defined _OLED_BY_SW_I2C
-	GPIO_TypeDef  *SCL_PORT,	 *SDA_PORT;
-	uint16_t 			 SCL_PIN,			SDA_PIN;
-#elif defined _OLED_BY_SPI
-	SPI_HandleTypeDef *hspin;
-	GPIO_TypeDef	*RES_PORT,	*DC_PORT,	*CS_PORT;
-	uint16_t 			 RES_PIN,		 DC_PIN,	 CS_PIN;	
-#endif 
-	uint16_t DevAddress;
+	void (*DrawPoint)(uint8_t x,uint8_t y);
+	void (*Clear)(void);
+}DRAW_Ptr;
+
+typedef struct
+{
+void (*Brightness)(uint8_t value);
+void (*IsForce_FullScreen)(uint8_t is);
+void (*Horizontal_Flip)(uint8_t is);
+void (*vertical_Flip)(uint8_t is);
+void (*Inverse_Display)(uint8_t is);
+void (*Display_OFF)(void);
+void (*Display_ON)(void);	
+void (*Refresh)(void);
+}SET_Ptr;
+
+
+typedef struct
+{
+	void (*Init)(void);
+	DRAW_Ptr Draw;
+	SET_Ptr Set;
 }OLED_HandleTypeDef;
+
 
 
 extern OLED_HandleTypeDef  holed;
 
 
 
-#ifdef _OLED_BY_SW_I2C
-
-	#define OLED_SCL_RESET() HAL_GPIO_WritePin(holed.SCL_PORT,holed.SCL_PIN,GPIO_PIN_RESET)
-	#define OLED_SCL_SET() 	 HAL_GPIO_WritePin(holed.SCL_PORT,holed.SCL_PIN,GPIO_PIN_SET)
-
-	#define OLED_SDA_RESET() HAL_GPIO_WritePin(holed.SDA_PORT,holed.SDA_PIN,GPIO_PIN_RESET)
-	#define OLED_SDA_SET() 	 HAL_GPIO_WritePin(holed.SDA_PORT,holed.SDA_PIN,GPIO_PIN_SET)
-
-#endif
-
-
-#ifdef _OLED_BY_SPI
-
-	#define OLED_RST_SET() HAL_GPIO_WritePin(holed.RES_PORT,holed.RES_PIN,GPIO_PIN_SET)
-	#define OLED_RST_RESET() HAL_GPIO_WritePin(holed.RES_PORT,holed.RES_PIN,GPIO_PIN_RESET)
-
-	#define OLED_DC_SET() HAL_GPIO_WritePin(holed.DC_PORT,holed.DC_PIN,GPIO_PIN_SET)
-	#define OLED_DC_RESET() HAL_GPIO_WritePin(holed.DC_PORT,holed.DC_PIN,GPIO_PIN_RESET)
-
-	#define OLED_CS_SET() HAL_GPIO_WritePin(holed.CS_PORT,holed.CS_PIN,GPIO_PIN_SET)
-	#define OLED_CS_RESET() HAL_GPIO_WritePin(holed.CS_PORT,holed.CS_PIN,GPIO_PIN_RESET)
-
-	#define OLED_DC_CMD() OLED_DC_RESET()
-	#define OLED_DC_DATA() OLED_DC_SET()
-
-#endif
 
 
 
-#define OLED_CMD 0
-#define OLED_DATA 1
 
 
-void OLED_Refresh(void);
-void OLED_DrawPoint(uint8_t x,uint8_t y);
-void OLED_Clear(void);
-void OLED_Init(void);
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 
 #endif 
+
+
+
+
+
 

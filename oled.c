@@ -1,7 +1,7 @@
 #include "oled.h"
 
 //******************************************** 资源声明  ********************************************//
-OLED_HandleTypeDef  holed;
+OLED_HandleTypeDef  holed={.Init=OLED_Init};
 volatile static uint8_t OLED_GDDRAM[128][8];  //显存
 //******************************************** 资源声明  ********************************************//
 
@@ -10,14 +10,10 @@ volatile static uint8_t OLED_GDDRAM[128][8];  //显存
 
 
 
-
-
-
-
-
-
 //*********************************** 多种接口的通信函数统一定义  ***********************************//
-//多种接口都调用OLED_WriteRead_Byte(uint8_t data,uint8_t CorD) 来发送信息
+//多种接口都调用
+//OLED_WriteRead_Byte(uint8_t data,uint8_t CorD) 
+//来发送信息
 #ifdef _OLED_BY_HW_I2C
 void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 {
@@ -29,14 +25,10 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 	
 	buf[1]=data;
 	
-	HAL_I2C_Master_Transmit(holed.hi2cn,holed.DevAddress,(uint8_t*)buf,2,0xffff);
+	HW_I2C_Transmit(OLED_hi2cn,OLED_DevAddress,buf,2);
 }
 
 #endif 
-
-
-
-
 #ifdef _OLED_BY_SW_I2C
 void SW_I2C_Start_Signal(void)
 {
@@ -83,7 +75,7 @@ void SW_I2C_SendByte(uint8_t data)
 void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 {
 	SW_I2C_Start_Signal();
-	SW_I2C_SendByte(holed.DevAddress);
+	SW_I2C_SendByte(OLED_DevAddress);
 	SW_I2C_WaitAck();
 	if(CorD)
 	{
@@ -108,11 +100,6 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 
 #ifdef _OLED_BY_SPI
 
-
-
-
-
-
 void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 {
 	uint8_t read;
@@ -122,7 +109,7 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 		OLED_DC_DATA();
 	
 	OLED_CS_RESET();
-	while(HAL_SPI_Transmit(holed.hspin,&data,1,0xffffff)!=HAL_OK);
+	while(HW_SPI_Transmit(OLED_hspin,&data,1)!=HAL_OK);
 	OLED_CS_SET();
 	
 	
@@ -132,13 +119,6 @@ void OLED_WriteRead_Byte(uint8_t data,uint8_t CorD)
 #endif
 
 //*********************************** 多种接口的通信函数统一定义  ***********************************//
-
-
-
-
-
-
-
 
 
 
@@ -194,120 +174,75 @@ void OLED_Clear(void)
 
 
 
+//************************************** 关于设置的函数放在这里  ***********************************//
+void OLED_Force_FullScreen(uint8_t is){is==0? OLED_WriteRead_Byte(0XA4,OLED_CMD):OLED_WriteRead_Byte(0XA5,OLED_CMD);}
+void OLED_DisplayClockDivide_and_OscillatorFrequency(uint8_t divide,uint8_t frequency){OLED_WriteRead_Byte(0XD5,OLED_CMD);OLED_WriteRead_Byte(divide| (frequency<< 4),OLED_CMD); }
+void OLED_Multiplex_Ratio(uint8_t amount){OLED_WriteRead_Byte(0XA8,OLED_CMD);OLED_WriteRead_Byte(amount,OLED_CMD);}
+void OLED_Offset(uint8_t offset){	OLED_WriteRead_Byte(0XD3,OLED_CMD);OLED_WriteRead_Byte(offset,OLED_CMD);}//starline 是RAM和ROW之间的映射，而offset是COM和ROW之间的映射
+void OLED_StartLine(uint8_t startline){OLED_WriteRead_Byte(0X40+startline,OLED_CMD);}
+void OLED_SegmentRemap_LeftTurnRight(uint8_t is){ is==0 ? OLED_WriteRead_Byte(0XA1,OLED_CMD):OLED_WriteRead_Byte(0XA0,OLED_CMD); }
+void OLED_COM_Scan_Direction_UpTurnDown(uint8_t is){ is==0 ? OLED_WriteRead_Byte(0XC8,OLED_CMD):OLED_WriteRead_Byte(0XC0,OLED_CMD); }
+void OLED_COM_Pins_Hardware_Configuration(){OLED_WriteRead_Byte(0XDA,OLED_CMD);OLED_WriteRead_Byte(0X12,OLED_CMD);}
+void OLED_Set_Contrast(uint8_t value){OLED_WriteRead_Byte(0X81,OLED_CMD);OLED_WriteRead_Byte(value,OLED_CMD);}
+void OLED_PreChargePeriod(uint8_t phase1,uint8_t phase2){OLED_WriteRead_Byte(0XD9,OLED_CMD);OLED_WriteRead_Byte(phase1|(phase2<<4),OLED_CMD);}
+void OLED_Deselect_VCOMH(uint8_t value){OLED_WriteRead_Byte(0XDB,OLED_CMD);OLED_WriteRead_Byte(value<<4,OLED_CMD);}
+void OLED_NormalorInverse_Display(uint8_t is){is==0? 	OLED_WriteRead_Byte(0XA6,OLED_CMD):	OLED_WriteRead_Byte(0XA7,OLED_CMD);}
+void OLED_Display_OFF(void){OLED_WriteRead_Byte(0X8D,OLED_CMD);/*电荷泵关闭*/OLED_WriteRead_Byte(0X10,OLED_CMD);OLED_WriteRead_Byte(0XAE,OLED_CMD);/*关闭显示*/}
+void OLED_Display_ON(void){OLED_WriteRead_Byte(0X8D,OLED_CMD);/*电荷泵开启*/OLED_WriteRead_Byte(0X14,OLED_CMD);OLED_WriteRead_Byte(0XAF,OLED_CMD);/*开启显示*/}
+void OLED_AddressingMode_PAGE(void){OLED_WriteRead_Byte(0X20,OLED_CMD);OLED_WriteRead_Byte(0X02,OLED_CMD);}
+void OLED_ColumnAddress(uint8_t low,uint8_t high){OLED_WriteRead_Byte(low,OLED_CMD);OLED_WriteRead_Byte(high,OLED_CMD);}
+void OLED_Brightness(uint8_t value)/*设置在0-15*/{OLED_Set_Contrast(value<<4);OLED_PreChargePeriod(0x10-value,value);OLED_Deselect_VCOMH(value>>1);}
+//************************************** 关于设置的函数放在这里  ***********************************//
 
 
-
-
-
-
-
-
-
-
-
-
-//*********************************** 用户从这里开始自定义配置接口  ***********************************//
 void OLED_Init(void)
 {
-
-
-	/*----------------------- 从机地址 -----------------------*/
-	holed.DevAddress=0x78;
-	/*----------------------- 从机地址 -----------------------*/
-
-	/*------------------------- 选择硬件I2C的在这里配置 ---------------------*/									
-	//设置指南：
-	//将 hi2c1改成你所使用的i2c_n的句柄
-	#ifdef _OLED_BY_HW_I2C
-	holed.hi2cn=&hi2c1;
-	#endif
-	/*------------------------- 选择硬件I2C的在这里配置 ---------------------*/	
-
-	/*--------------------------选择软件I2C的在这里配置 ---------------------*/
-	//设置指南：
-	//SCL和SDA可以使用任意一个GPIO管脚
-	//最好设置成开漏上拉超高速模式
-	//APB2时钟设置为36即可。超过了可能不工作
-	#ifdef _OLED_BY_SW_I2C
 	
-	holed.SCL_PORT=GPIOA;
-	holed.SCL_PIN=GPIO_PIN_5;
-	holed.SDA_PORT=GPIOA;
-	holed.SDA_PIN=GPIO_PIN_7;
-	
-	#endif	
-	/*---------------------------- 选择软件I2C的在这里配置 ---------------------*/
-
-	/*--------------------------- 选择SPI的在这里设置 -------------------------*/
-	//设置指南：
-	//SPI可以设置成 摩托罗拉格式，8位数据长度，高位先行，预分频2，时钟和相位可以设置成LOW-1Edge或者HIGH-2Edge 都行，失能RCC校验，NSS软件选择模式。
-	//为了提高刷新率，可以使用SPI1-其使用APB2外设时钟， 选择APB1和APB2外设时钟频率最高的那个，配置到最高。如F4用SPI1可以达到42M的波特率
-	//												SPI2-其使用APB1外设时钟，
-	//其余RES、DC、CS 设置成推挽输出即可。
 	#ifdef _OLED_BY_SPI
-
-	holed.hspin=&hspi1;
-	holed.RES_PORT=GPIOF;
-	holed.RES_PIN=GPIO_PIN_13;
-	holed.DC_PORT=GPIOF;
-	holed.DC_PIN=GPIO_PIN_14;
-	holed.CS_PORT=GPIOF;
-	holed.CS_PIN=GPIO_PIN_15;
 	OLED_RST_SET();   
 	HAL_Delay(100);		
 	OLED_RST_RESET();
 	HAL_Delay(200);
 	OLED_RST_SET();
-	
 	#endif
-	/*--------------------------- 选择SPI的在这里设置 -------------------------*/	
+
+	
+	
+	
+	holed.Set.Brightness=OLED_Brightness;
+	holed.Set.Display_OFF=OLED_Display_OFF;
+	holed.Set.Display_ON=OLED_Display_ON;
+	holed.Set.Horizontal_Flip=OLED_SegmentRemap_LeftTurnRight;
+	holed.Set.Inverse_Display=OLED_NormalorInverse_Display;
+	holed.Set.IsForce_FullScreen=OLED_Force_FullScreen;
+	holed.Set.vertical_Flip=OLED_COM_Scan_Direction_UpTurnDown;
+	holed.Set.Refresh=OLED_Refresh;
+	
+	holed.Draw.Clear=OLED_Clear;
+	holed.Draw.DrawPoint=OLED_DrawPoint;
 
 	
 	
 	/*------------------------------ OLED 参数设置 ----------------------------*/
-	OLED_WriteRead_Byte(0XAE,OLED_CMD);	//关闭显示
-	
-	OLED_WriteRead_Byte(0XD5,OLED_CMD);
-	OLED_WriteRead_Byte(0X80,OLED_CMD);  //可能可以改成f0
-	
-	OLED_WriteRead_Byte(0XA8,OLED_CMD);
-	OLED_WriteRead_Byte(0X3F,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XD3,OLED_CMD);
-	OLED_WriteRead_Byte(0X00,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0X40,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0X8D,OLED_CMD);
-	OLED_WriteRead_Byte(0X14,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0X20,OLED_CMD);
-	OLED_WriteRead_Byte(0X02,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XA1,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XC8,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XDA,OLED_CMD);
-	OLED_WriteRead_Byte(0X12,OLED_CMD);
-
-	OLED_WriteRead_Byte(0X81,OLED_CMD);
-	OLED_WriteRead_Byte(0XEF,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XD9,OLED_CMD);
-	OLED_WriteRead_Byte(0XF1,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XDB,OLED_CMD);
-	OLED_WriteRead_Byte(0X30,OLED_CMD);
-	
-	OLED_WriteRead_Byte(0XA4,OLED_CMD);
-	OLED_WriteRead_Byte(0XA6,OLED_CMD);
-	OLED_WriteRead_Byte(0XAF,OLED_CMD);
-	
-	//OLED_Force_FullScreen();
+	//设置亮度调OLED_Deselect_VCOMH，OLED_PreChargePeriod，OLED_Set_Contrast
+	OLED_Display_OFF();//关闭显示
+	OLED_DisplayClockDivide_and_OscillatorFrequency(0x00,0x0f);//设置(显示的时钟分频系数-1)和(频率) 取值都在b0000-b1111;
+	OLED_Multiplex_Ratio(0x3f); //设置使用显示器的行数，取值在0x00-0x3f(D63)之间。
+	OLED_Offset(0x00);//设置行偏置取值在0x00-0x3f之间
+	OLED_StartLine(0x00);//设置起始行数取值在00x00-0x3f之间
+	OLED_SegmentRemap_LeftTurnRight(0);//设置列细分的重映射，即左右翻转  这里面的值和ssd1306的Datasheet描述不太一样，这是因为中景园类型的OLED的layout设计导致显示上的变化需要改回去。
+	OLED_COM_Scan_Direction_UpTurnDown(0);//设置行扫描方向，上下翻转
+	OLED_COM_Pins_Hardware_Configuration();
+	OLED_Set_Contrast(0xff);	
+	OLED_PreChargePeriod(0x01,0x0f);//放电、充电CLK周期 只能是1-15。
+	OLED_Deselect_VCOMH(0x0f);//0-7,VcomH电平选择
+	OLED_Force_FullScreen(0);//无视GDDRAM强制全屏
+	OLED_AddressingMode_PAGE();
+	OLED_ColumnAddress(0x00,0x10);
+	OLED_NormalorInverse_Display(0);//是否反显
+	OLED_Display_ON();//开启显示
 	/*------------------------------ OLED 参数设置 ----------------------------*/
-
-
+	
 	OLED_Clear();
 	OLED_Refresh();
 }
